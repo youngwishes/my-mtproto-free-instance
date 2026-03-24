@@ -35,7 +35,7 @@ services:
     container_name: telemt
     restart: unless-stopped
     environment:
-      RUST_LOG: "info"
+      RUST_LOG: "debug"
     volumes:
       - ./telemt.toml:/etc/telemt.toml:ro
     security_opt:
