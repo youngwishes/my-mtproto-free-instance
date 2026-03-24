@@ -1,0 +1,26 @@
+[server]
+port = 443
+listen_addr_ipv4 = "0.0.0.0"
+listen_addr_ipv6 = "::"
+metrics_whitelist = ["172.20.0.0/16"]
+metrics_port = 9090
+
+[general]
+prefer_ipv6 = false
+fast_mode = true
+use_middle_proxy = true
+
+[censorship]
+tls_domain = "beatvault.ru"
+mask = true
+mask_port = 443
+fake_cert_len = 2048
+tls_emulation = true
+
+[general.modes]
+classic = false
+secure = false
+tls = true
+
+[access.users]
+free = "f7500d69d0479eb1c90454490aa7096d"
