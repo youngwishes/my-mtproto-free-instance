@@ -1,54 +1,30 @@
 services:
-  haproxy:
-    image: haproxy:lts-alpine
-    container_name: haproxy
-    ports:
-      - "0.0.0.0:443:443"
-      - "0.0.0.0:80:80"
-    expose:
-      - "8404"
-    volumes:
-      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
-    networks:
-      - telemt-network
-    restart: unless-stopped
-    depends_on:
-      - telemt
-
   telemt:
-    image: whn0thacked/telemt-docker:3.3.28
+    image: whn0thacked/telemt-docker:3.3.38
     container_name: telemt
     restart: unless-stopped
+    user: "root"
     environment:
-      RUST_LOG: "debug"
+      RUST_LOG: "info"
+    command: ["/etc/telemt/telemt.toml"]
     volumes:
-      - ./telemt.toml:/etc/telemt.toml:ro
+      - ./telemt:/etc/telemt/:rw
     security_opt:
       - no-new-privileges:true
-    expose:
-      - "443"
+    ports:
+      - "443:443/tcp"
     cap_drop:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    read_only: true
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=16m
-    deploy:
-      resources:
-        limits:
-          cpus: "0.50"
-          memory: 256M
-    networks:
-      - telemt-network
     ulimits:
       nofile:
         soft: 65536
         hard: 65536
-
-networks:
-  telemt-network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
+    logging:
+      driver: "local"
+      options:
+        max-size: "10m"
+        max-file: "3"

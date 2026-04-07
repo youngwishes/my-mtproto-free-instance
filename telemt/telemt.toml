@@ -2,8 +2,6 @@
 port = 443
 listen_addr_ipv4 = "0.0.0.0"
 listen_addr_ipv6 = "::"
-metrics_whitelist = ["172.20.0.0/16"]
-metrics_port = 9090
 
 [general]
 prefer_ipv6 = false
@@ -11,7 +9,7 @@ fast_mode = true
 use_middle_proxy = true
 
 [censorship]
-tls_domain = "beatvault.ru"
+tls_domain = "drive.google.com"
 mask = true
 mask_port = 443
 fake_cert_len = 2048
