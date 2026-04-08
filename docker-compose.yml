@@ -12,7 +12,8 @@ services:
     security_opt:
       - no-new-privileges:true
     ports:
-      - "443:443/tcp"
+      - "443:443/tcp" # telegram
+      - "9090:9090" # metrics
     cap_drop:
       - ALL
     cap_add:

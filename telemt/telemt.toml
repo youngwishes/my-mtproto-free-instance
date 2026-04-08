@@ -4,6 +4,8 @@ show_link = [ "free",]
 port = 443
 listen_addr_ipv4 = "0.0.0.0"
 listen_addr_ipv6 = "::"
+metrics_port = 9090
+metrics_whitelist = []
 
 [server.api]
 enabled = false
@@ -12,6 +14,7 @@ enabled = false
 prefer_ipv6 = false
 fast_mode = true
 use_middle_proxy = true
+ad_tag = "6da29ba9382157620367d772dd19ef67"
 
 [general.modes]
 classic = false
