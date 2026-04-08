@@ -1,6 +1,6 @@
 services:
   telemt:
-    image: whn0thacked/telemt-docker:3.3.38
+    image: whn0thacked/telemt-docker:3.3.39
     container_name: telemt
     restart: unless-stopped
     user: "root"
