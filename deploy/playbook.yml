@@ -2,6 +2,8 @@
 - name: Deploy MTProto Free Instance
   hosts: mtproto_servers
   become: true
+  serial: 1
+  any_errors_fatal: true
 
   vars:
     repo_url: https://github.com/youngwishes/my-mtproto-free-instance.git
@@ -80,3 +82,11 @@
       shell:
         cmd: docker compose up -d
         chdir: "{{ deploy_dir }}"
+
+    - name: Install Telemt GeoIP allowlist
+      ansible.builtin.include_role:
+        name: telemt_geo_allow
+
+    - name: Install Telemt SYN limiter
+      ansible.builtin.include_role:
+        name: telemt_syn_limit

@@ -1,0 +1,12 @@
+---
+- name: Disable Docker-aware Telemt SYN limiter
+  hosts: mtproto_servers
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  tasks:
+    - name: Stop and disable Telemt SYN limiter
+      ansible.builtin.systemd_service:
+        name: telemt-syn-limit.service
+        state: stopped
+        enabled: false

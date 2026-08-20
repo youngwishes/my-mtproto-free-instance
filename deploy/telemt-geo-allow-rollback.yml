@@ -1,0 +1,28 @@
+---
+- name: Disable Russian IPv4 allowlist for Telemt
+  hosts: mtproto_servers
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  tasks:
+    - name: Check Telemt GeoIP firewall manager
+      ansible.builtin.stat:
+        path: /usr/local/sbin/telemt-geo-allow
+      register: telemt_geo_manager
+
+    - name: Remove Telemt GeoIP firewall state
+      ansible.builtin.command: /usr/local/sbin/telemt-geo-allow stop
+      when: telemt_geo_manager.stat.exists
+      changed_when: true
+
+    - name: Check Telemt GeoIP systemd unit
+      ansible.builtin.stat:
+        path: /etc/systemd/system/telemt-geo-allow.service
+      register: telemt_geo_unit
+
+    - name: Stop and disable Telemt GeoIP allowlist
+      ansible.builtin.systemd_service:
+        name: telemt-geo-allow.service
+        state: stopped
+        enabled: false
+      when: telemt_geo_unit.stat.exists

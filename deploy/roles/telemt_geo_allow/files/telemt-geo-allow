@@ -1,0 +1,224 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CHAIN="TELEMT_GEO_ALLOW"
+SET_NAME="${TELEMT_GEO_SET:-telemt_ru_ipv4}"
+NEXT_SET="${SET_NAME}_next"
+INTERFACE="${TELEMT_GEO_INTERFACE:-${2:-}}"
+PORT="${TELEMT_GEO_PORT:-443}"
+CIDR_FILE="${TELEMT_GEO_CIDR_FILE:-/var/lib/telemt-geo-allow/ru-ipv4.cidr}"
+MIN_NETWORKS="${TELEMT_GEO_MIN_NETWORKS:-1000}"
+GUARD_COMMENT="telemt-geo-fail-closed"
+
+require_interface() {
+    if [[ -z "$INTERFACE" ]]; then
+        echo "TELEMT_GEO_INTERFACE is required" >&2
+        return 2
+    fi
+}
+
+create_set() {
+    local name="$1"
+    ipset create "$name" hash:net \
+        family inet hashsize 4096 maxelem 131072 -exist
+}
+
+load_set() {
+    local source_file="$1"
+    local network_count
+
+    if [[ ! -r "$source_file" ]]; then
+        echo "CIDR file is not readable: $source_file" >&2
+        return 1
+    fi
+
+    network_count=$(awk 'NF && $1 !~ /^#/ { count += 1 } END { print count + 0 }' "$source_file")
+    if ((network_count < MIN_NETWORKS)); then
+        echo "only $network_count IPv4 networks; minimum is $MIN_NETWORKS" >&2
+        return 1
+    fi
+
+    create_set "$SET_NAME" || return 1
+    ipset destroy "$NEXT_SET" 2>/dev/null || true
+    ipset create "$NEXT_SET" hash:net \
+        family inet hashsize 4096 maxelem 131072 || return 1
+
+    if ! awk -v set_name="$NEXT_SET" \
+        'NF && $1 !~ /^#/ { print "add " set_name " " $1 }' \
+        "$source_file" | ipset restore; then
+        ipset destroy "$NEXT_SET" 2>/dev/null || true
+        return 1
+    fi
+
+    if ! ipset swap "$NEXT_SET" "$SET_NAME"; then
+        ipset destroy "$NEXT_SET" 2>/dev/null || true
+        return 1
+    fi
+    if ! ipset destroy "$NEXT_SET"; then
+        echo "warning: could not remove stale ipset $NEXT_SET after successful swap" >&2
+    fi
+    return 0
+}
+
+remove_jumps() {
+    local -a rule
+    local index
+
+    while read -r -a rule; do
+        for ((index = 0; index < ${#rule[@]} - 1; index++)); do
+            if [[ "${rule[index]}" == "-j" && "${rule[index + 1]}" == "$CHAIN" ]]; then
+                rule[0]="-D"
+                iptables -w "${rule[@]}" || return 1
+                break
+            fi
+        done
+    done < <(iptables -w -S DOCKER-USER)
+}
+
+remove_guards() {
+    local -a rule
+    local index
+
+    while read -r -a rule; do
+        for ((index = 0; index < ${#rule[@]} - 1; index++)); do
+            if [[ "${rule[index]}" == "--comment" && "${rule[index + 1]}" == "$GUARD_COMMENT" ]]; then
+                rule[0]="-D"
+                iptables -w "${rule[@]}" || return 1
+                break
+            fi
+        done
+    done < <(iptables -w -S DOCKER-USER)
+}
+
+install_guard() {
+    require_interface || return 1
+    iptables -w -I DOCKER-USER 1 \
+        -i "$INTERFACE" -p tcp --dport "$PORT" --syn \
+        -m comment --comment "$GUARD_COMMENT" \
+        -j REJECT --reject-with tcp-reset
+}
+
+remove_rules() {
+    remove_jumps || return 1
+    iptables -w -F "$CHAIN" 2>/dev/null || true
+    iptables -w -X "$CHAIN" 2>/dev/null || true
+}
+
+apply_rules() {
+    require_interface || return 1
+    iptables -w -nL DOCKER-USER >/dev/null || return 1
+    create_set "$SET_NAME" || return 1
+    install_guard || return 1
+    remove_rules || return 1
+    iptables -w -N "$CHAIN" || return 1
+    iptables -w -A "$CHAIN" \
+        -m set --match-set "$SET_NAME" src \
+        -j RETURN || return 1
+    iptables -w -A "$CHAIN" -p tcp \
+        -j REJECT --reject-with tcp-reset || return 1
+    iptables -w -I DOCKER-USER 1 \
+        -i "$INTERFACE" -p tcp --dport "$PORT" --syn \
+        -j "$CHAIN" || return 1
+    remove_guards || return 1
+}
+
+has_single_jump() {
+    local -a rule
+    local index
+    local jump_count=0
+    local jump_position=0
+    local rule_position=0
+
+    while read -r -a rule; do
+        [[ "${rule[0]:-}" == "-A" && "${rule[1]:-}" == "DOCKER-USER" ]] || continue
+        ((rule_position += 1))
+        for ((index = 0; index < ${#rule[@]} - 1; index++)); do
+            if [[ "${rule[index]}" == "-j" && "${rule[index + 1]}" == "$CHAIN" ]]; then
+                ((jump_count += 1))
+                jump_position="$rule_position"
+                break
+            fi
+        done
+    done < <(iptables -w -S DOCKER-USER)
+
+    [[ "$jump_count" -eq 1 && "$jump_position" -eq 1 ]]
+}
+
+has_exact_chain_shape() {
+    local -a rule
+    local index
+    local rule_count=0
+    local first_target=""
+    local second_target=""
+
+    while read -r -a rule; do
+        [[ "${rule[0]:-}" == "-A" && "${rule[1]:-}" == "$CHAIN" ]] || continue
+        ((rule_count += 1))
+        for ((index = 0; index < ${#rule[@]} - 1; index++)); do
+            if [[ "${rule[index]}" == "-j" ]]; then
+                if [[ "$rule_count" -eq 1 ]]; then
+                    first_target="${rule[index + 1]}"
+                elif [[ "$rule_count" -eq 2 ]]; then
+                    second_target="${rule[index + 1]}"
+                fi
+                break
+            fi
+        done
+    done < <(iptables -w -S "$CHAIN")
+
+    [[ "$rule_count" -eq 2 && "$first_target" == "RETURN" && "$second_target" == "REJECT" ]]
+}
+
+check_rules() {
+    local entry_count
+
+    require_interface
+    entry_count=$(ipset list "$SET_NAME" | awk '/^Number of entries:/ { print $4 }')
+    if ! [[ "$entry_count" =~ ^[0-9]+$ && "$entry_count" -ge "$MIN_NETWORKS" ]]; then
+        return 1
+    fi
+    has_single_jump || return 1
+    has_exact_chain_shape || return 1
+    iptables -w -C DOCKER-USER \
+        -i "$INTERFACE" -p tcp --dport "$PORT" --syn \
+        -j "$CHAIN" || return 1
+    iptables -w -C "$CHAIN" \
+        -m set --match-set "$SET_NAME" src \
+        -j RETURN || return 1
+    iptables -w -C "$CHAIN" -p tcp \
+        -j REJECT --reject-with tcp-reset
+}
+
+start_service() {
+    create_set "$SET_NAME" || return 1
+    apply_rules || return 1
+    if [[ -s "$CIDR_FILE" ]] && ! load_set "$CIDR_FILE"; then
+        echo "cached CIDR file is invalid; keeping the current fail-closed set" >&2
+    fi
+}
+
+stop_service() {
+    remove_rules || return 1
+    remove_guards || return 1
+    ipset destroy "$NEXT_SET" 2>/dev/null || true
+    ipset destroy "$SET_NAME" 2>/dev/null || true
+}
+
+case "${1:-start}" in
+    start)
+        start_service
+        ;;
+    stop)
+        stop_service
+        ;;
+    check)
+        check_rules
+        ;;
+    load)
+        load_set "${2:-$CIDR_FILE}"
+        ;;
+    *)
+        echo "usage: $0 {start|stop|check|load [CIDR_FILE]}" >&2
+        exit 2
+        ;;
+esac
