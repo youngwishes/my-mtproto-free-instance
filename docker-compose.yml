@@ -14,7 +14,6 @@ services:
       - no-new-privileges:true
     ports:
       - "443:443/tcp"
-      - "9091:9091"
     cap_drop:
       - ALL
     cap_add:

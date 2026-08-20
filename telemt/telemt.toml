@@ -8,7 +8,7 @@ weight = 1
 [general]
 fast_mode = true
 use_middle_proxy = true
-ad_tag = "6da29ba9382157620367d772dd19ef67"
+ad_tag = "2030a76fde7271422b1e5b395551de2e"
 
 [network]
 ipv4 = true
@@ -36,4 +36,4 @@ tls = true
 free = "f7500d69d0479eb1c90454490aa7096d"
 
 [access.user_max_unique_ips]
-free = 1000
+free = 2000
