@@ -1,6 +1,6 @@
 services:
   telemt:
-    image: ghcr.io/telemt/telemt:latest
+    image: ghcr.io/telemt/telemt:3.4.22
     container_name: telemt
     restart: unless-stopped
     user: "root"

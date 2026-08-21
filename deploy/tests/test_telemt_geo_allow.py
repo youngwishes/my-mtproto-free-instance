@@ -448,19 +448,21 @@ class TelemtGeoAllowTests(unittest.TestCase):
             self.assertFalse(set_state.joinpath("telemt_ru_ipv4").exists())
             self.assertFalse(jump_state.read_text().strip())
 
-    def test_main_deploy_installs_geo_allow_before_syn_limit(self) -> None:
+    def test_main_deploy_removes_geo_allow_before_syn_limit(self) -> None:
         result = self.ansible("playbook.yml", "--list-tasks")
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Start containers", result.stdout)
-        self.assertIn("Install Telemt GeoIP allowlist", result.stdout)
+        self.assertIn("Remove Telemt GeoIP firewall state", result.stdout)
+        self.assertIn("Stop and disable Telemt GeoIP allowlist", result.stdout)
         self.assertIn("Install Telemt SYN limiter", result.stdout)
+        self.assertNotIn("Install Telemt GeoIP allowlist", result.stdout)
         self.assertLess(
             result.stdout.index("Start containers"),
-            result.stdout.index("Install Telemt GeoIP allowlist"),
+            result.stdout.index("Remove Telemt GeoIP firewall state"),
         )
         self.assertLess(
-            result.stdout.index("Install Telemt GeoIP allowlist"),
+            result.stdout.index("Stop and disable Telemt GeoIP allowlist"),
             result.stdout.index("Install Telemt SYN limiter"),
         )
 
@@ -510,7 +512,7 @@ class TelemtGeoAllowTests(unittest.TestCase):
         self.assertIn("/opt/telemt-geo-allow/venv/bin/python", tasks)
         self.assertNotIn("python3-maxminddb", tasks)
 
-    def test_syn_limiter_is_ordered_after_geo_allow(self) -> None:
+    def test_syn_limiter_orders_after_geo_allow_when_present(self) -> None:
         syn_script = (
             ROOT / "roles" / "telemt_syn_limit" / "files" / "telemt-syn-limit"
         )
@@ -561,7 +563,7 @@ class TelemtGeoAllowTests(unittest.TestCase):
                 "-j TELEMT_SYN_LIMIT",
                 log.read_text(),
             )
-            self.assertIn("telemt-geo-allow.service", syn_unit)
+            self.assertNotIn("telemt-geo-allow.service", syn_unit)
 
 
 if __name__ == "__main__":

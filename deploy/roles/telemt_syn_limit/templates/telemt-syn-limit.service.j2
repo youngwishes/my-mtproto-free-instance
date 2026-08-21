@@ -1,7 +1,7 @@
 [Unit]
 Description=Rate-limit Telemt SYN attempts in Docker forwarding path
 Requires=docker.service
-After=docker.service network-online.target telemt-geo-allow.service
+After=docker.service network-online.target
 PartOf=docker.service
 
 [Service]

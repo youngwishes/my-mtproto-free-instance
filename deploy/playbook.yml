@@ -83,9 +83,8 @@
         cmd: docker compose up -d
         chdir: "{{ deploy_dir }}"
 
-    - name: Install Telemt GeoIP allowlist
-      ansible.builtin.include_role:
-        name: telemt_geo_allow
+    - name: Remove legacy Telemt GeoIP allowlist
+      ansible.builtin.import_tasks: tasks/remove-telemt-geo-allow.yml
 
     - name: Install Telemt SYN limiter
       ansible.builtin.include_role:
