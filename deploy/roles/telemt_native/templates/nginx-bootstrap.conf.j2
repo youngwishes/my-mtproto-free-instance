@@ -1,0 +1,13 @@
+server {
+    listen 0.0.0.0:80 default_server;
+    server_name {{ telemt_domain }} _;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/acme;
+        default_type text/plain;
+    }
+
+    location / {
+        return 301 https://{{ telemt_domain }}$request_uri;
+    }
+}

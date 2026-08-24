@@ -1,0 +1,114 @@
+---
+- name: Remove the packaged nginx default site
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/nginx/sites-enabled/default
+    - /etc/nginx/sites-available/default
+  notify: Restart nginx
+
+- name: Create web directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: "0755"
+  loop:
+    - /var/www/meow-meow-fast
+    - /var/www/acme
+
+- name: Install the static mask page
+  ansible.builtin.template:
+    src: index.html.j2
+    dest: /var/www/meow-meow-fast/index.html
+    owner: www-data
+    group: www-data
+    mode: "0644"
+  notify: Restart nginx
+
+- name: Check for an existing TLS certificate
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ telemt_domain }}/fullchain.pem"
+  register: telemt_certificate_file
+  when: telemt_activate | bool
+
+- name: Install the HTTP bootstrap site
+  ansible.builtin.template:
+    src: nginx-bootstrap.conf.j2
+    dest: /etc/nginx/sites-available/telemt-mask.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - telemt_activate | bool
+    - not telemt_certificate_file.stat.exists
+  notify: Restart nginx
+
+- name: Enable the mask site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/telemt-mask.conf
+    dest: /etc/nginx/sites-enabled/telemt-mask.conf
+    state: link
+  when: telemt_activate | bool
+  notify: Restart nginx
+
+- name: Disable nginx while the deployment is staged
+  ansible.builtin.systemd_service:
+    name: nginx
+    enabled: false
+    state: stopped
+  when: not telemt_activate | bool
+
+- name: Start the HTTP bootstrap site
+  ansible.builtin.meta: flush_handlers
+  when:
+    - telemt_activate | bool
+    - not telemt_certificate_file.stat.exists
+
+- name: Ensure nginx is available for ACME
+  ansible.builtin.systemd_service:
+    name: nginx
+    enabled: true
+    state: started
+  when: telemt_activate | bool
+
+- name: Obtain or renew the TLS certificate
+  ansible.builtin.command:
+    argv: "{{ ['certbot', 'certonly', '--webroot', '--webroot-path', '/var/www/acme', '--domain', telemt_domain, '--agree-tos', '--non-interactive', '--keep-until-expiring'] + ([ '--email', telemt_acme_email ] if telemt_acme_email | length > 0 else [ '--register-unsafely-without-email' ]) }}"
+  args:
+    creates: "/etc/letsencrypt/live/{{ telemt_domain }}/fullchain.pem"
+  when: telemt_activate | bool
+  register: telemt_certificate
+
+- name: Install the complete HTTPS mask site
+  ansible.builtin.template:
+    src: nginx-site.conf.j2
+    dest: /etc/nginx/sites-available/telemt-mask.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: telemt_activate | bool
+  register: telemt_nginx_site
+  notify: Restart nginx
+
+- name: Install the certificate deployment hook
+  ansible.builtin.template:
+    src: certbot-deploy-hook.sh.j2
+    dest: /etc/letsencrypt/renewal-hooks/deploy/telemt-mask
+    owner: root
+    group: root
+    mode: "0755"
+  when: telemt_activate | bool
+
+- name: Enable automatic certificate renewal
+  ansible.builtin.systemd_service:
+    name: certbot.timer
+    enabled: true
+    state: started
+  when: telemt_activate | bool
+
+- name: Activate the complete HTTPS mask site
+  ansible.builtin.meta: flush_handlers
+  when: telemt_activate | bool

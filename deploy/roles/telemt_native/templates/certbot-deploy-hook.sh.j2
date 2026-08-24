@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+if [ "${RENEWED_LINEAGE:-}" = "/etc/letsencrypt/live/{{ telemt_domain }}" ]; then
+    /usr/sbin/nginx -t
+    /usr/bin/systemctl reload nginx
+    /usr/bin/systemctl restart telemt
+fi

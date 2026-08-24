@@ -1,9 +1,0 @@
----
-telemt_geo_port: 443
-telemt_geo_country_code: RU
-telemt_geo_set_name: telemt_ru_ipv4
-telemt_geo_min_networks: 1000
-telemt_geo_state_dir: /var/lib/telemt-geo-allow
-telemt_geo_cidr_file: "{{ telemt_geo_state_dir }}/ru-ipv4.cidr"
-telemt_geo_database_url: https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-Country.mmdb
-telemt_geo_maxminddb_version: "2.6.3"

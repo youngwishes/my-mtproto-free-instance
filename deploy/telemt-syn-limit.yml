@@ -1,8 +1,0 @@
----
-- name: Install Docker-aware Telemt SYN limiter
-  hosts: mtproto_servers
-  become: true
-  serial: 1
-  any_errors_fatal: true
-  roles:
-    - role: telemt_syn_limit

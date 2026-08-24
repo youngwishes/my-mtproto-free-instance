@@ -1,0 +1,93 @@
+---
+- name: Verify native Telemt deployment
+  hosts: telemt_servers
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require the native services to be active
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - --quiet
+          - "{{ item }}"
+      loop:
+        - telemt.service
+        - nginx.service
+        - nftables.service
+      changed_when: false
+
+    - name: Run Telemt readiness probe
+      ansible.builtin.command:
+        argv:
+          - /usr/local/bin/telemt
+          - healthcheck
+          - --mode
+          - ready
+          - /etc/telemt/telemt.toml
+      changed_when: false
+
+    - name: Check the public HTTPS fallback through Telemt
+      ansible.builtin.command:
+        argv:
+          - curl
+          - --fail
+          - --silent
+          - --show-error
+          - --resolve
+          - "{{ telemt_domain }}:443:127.0.0.1"
+          - "https://{{ telemt_domain }}/"
+      register: telemt_https_fallback
+      changed_when: false
+
+    - name: Require the expected site content
+      ansible.builtin.assert:
+        that:
+          - telemt_site_title in telemt_https_fallback.stdout
+        fail_msg: HTTPS fallback did not return the configured site
+
+    - name: Read the active nftables ruleset
+      ansible.builtin.command:
+        argv:
+          - nft
+          - list
+          - ruleset
+      register: telemt_nft_ruleset
+      changed_when: false
+
+    - name: Require a Telemt-owned SYN limiter table
+      ansible.builtin.assert:
+        that:
+          - "'table inet telemt_synlimit_' in telemt_nft_ruleset.stdout"
+        fail_msg: Telemt did not install its nftables SYN limiter
+
+    - name: Check that Docker is absent
+      ansible.builtin.command:
+        argv:
+          - dpkg-query
+          - -W
+          - docker-ce
+      register: docker_package
+      changed_when: false
+      failed_when: docker_package.rc == 0
+
+    - name: Read generated proxy links from the local API
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9091/v1/users
+        return_content: true
+      register: telemt_users
+      no_log: true
+
+    - name: Store the generated TLS link for root
+      ansible.builtin.copy:
+        content: "{{ telemt_users.json.data[0].links.tls[0] }}\n"
+        dest: /root/telemt-link.txt
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Verification result
+      ansible.builtin.debug:
+        msg: Deployment is healthy; the proxy link is stored in /root/telemt-link.txt

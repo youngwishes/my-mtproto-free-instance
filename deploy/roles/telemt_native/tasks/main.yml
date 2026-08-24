@@ -1,0 +1,25 @@
+---
+- name: Validate deployment inputs
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - ansible_facts['distribution_version'] is version('24.04', '>=')
+      - ansible_facts['architecture'] == 'x86_64'
+      - telemt_archive_sha256 is match('^[0-9a-f]{64}$')
+      - not telemt_activate or telemt_domain is match('^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$')
+    fail_msg: Deployment requires Ubuntu 24.04 x86_64, a pinned checksum, and a valid domain when activated
+
+- name: Prepare the operating system
+  ansible.builtin.import_tasks: prepare.yml
+
+- name: Install native Telemt
+  ansible.builtin.import_tasks: telemt.yml
+
+- name: Configure the host firewall
+  ansible.builtin.import_tasks: firewall.yml
+
+- name: Configure the HTTPS mask site
+  ansible.builtin.import_tasks: web.yml
+
+- name: Activate or stage Telemt
+  ansible.builtin.import_tasks: activate.yml

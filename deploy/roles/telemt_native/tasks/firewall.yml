@@ -1,0 +1,21 @@
+---
+- name: Install the host nftables policy
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/nft -c -f %s
+  register: telemt_firewall_config
+  notify:
+    - Restart nftables
+
+- name: Enable nftables
+  ansible.builtin.systemd_service:
+    name: nftables
+    enabled: true
+    state: started
+
+- name: Apply firewall changes before public services start
+  ansible.builtin.meta: flush_handlers

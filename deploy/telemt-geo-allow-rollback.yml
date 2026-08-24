@@ -1,9 +1,0 @@
----
-- name: Disable Russian IPv4 allowlist for Telemt
-  hosts: mtproto_servers
-  become: true
-  serial: 1
-  any_errors_fatal: true
-  tasks:
-    - name: Remove Telemt GeoIP allowlist
-      ansible.builtin.import_tasks: tasks/remove-telemt-geo-allow.yml

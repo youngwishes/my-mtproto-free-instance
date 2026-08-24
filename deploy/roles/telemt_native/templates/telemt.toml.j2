@@ -1,0 +1,68 @@
+[general]
+use_middle_proxy = true
+log_level = "normal"
+{% if telemt_ad_tag | length > 0 %}
+ad_tag = "{{ telemt_ad_tag }}"
+{% endif %}
+
+[general.modes]
+classic = false
+secure = false
+tls = true
+
+[general.links]
+show = ["free"]
+public_host = "{{ telemt_domain }}"
+public_port = 443
+
+[network]
+ipv4 = true
+ipv6 = false
+prefer = 4
+
+[server]
+port = 443
+listen_backlog = 65535
+max_connections = 50000
+client_mss_bulk = "1400"
+metrics_listen = "127.0.0.1:9090"
+metrics_whitelist = ["127.0.0.1/32", "::1/128"]
+
+[server.api]
+enabled = true
+listen = "127.0.0.1:9091"
+whitelist = ["127.0.0.1/32", "::1/128"]
+minimal_runtime_enabled = false
+
+[[server.listeners]]
+ip = "0.0.0.0"
+port = 443
+client_mss = "tspu"
+synlimit = "nftables"
+synlimit_seconds = 1
+synlimit_hitcount = 12
+synlimit_burst = 24
+synlimit_ios_seconds = 1
+synlimit_ios_hitcount = 12
+synlimit_ios_burst = 24
+synlimit_hashlimit_expire_ms = 60000
+synlimit_hashlimit_size = 32768
+
+[censorship]
+tls_domain = "{{ telemt_domain }}"
+unknown_sni_action = "mask"
+mask = true
+mask_host = "127.0.0.1"
+mask_port = 8443
+tls_emulation = true
+tls_front_dir = "{{ telemt_state_dir }}/tlsfront"
+tls_new_session_tickets = 0
+
+[censorship.tls_fetch]
+strict_route = true
+
+[access.users]
+free = "{{ telemt_secret }}"
+
+[access.user_max_unique_ips]
+free = 2000

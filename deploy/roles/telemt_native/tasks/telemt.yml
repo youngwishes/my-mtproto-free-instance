@@ -1,0 +1,97 @@
+---
+- name: Create the Telemt system account
+  ansible.builtin.user:
+    name: telemt
+    system: true
+    create_home: false
+    home: "{{ telemt_state_dir }}"
+    shell: /usr/sbin/nologin
+
+- name: Create Telemt directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: "{{ telemt_config_dir }}", owner: root, group: telemt, mode: "0750"}
+    - {path: "{{ telemt_state_dir }}", owner: telemt, group: telemt, mode: "0750"}
+    - {path: "{{ telemt_state_dir }}/tlsfront", owner: telemt, group: telemt, mode: "0750"}
+    - {path: /var/cache/telemt, owner: root, group: root, mode: "0755"}
+    - {path: "{{ telemt_install_dir }}", owner: root, group: root, mode: "0755"}
+
+- name: Download the pinned Telemt release
+  ansible.builtin.get_url:
+    url: "{{ telemt_archive_url }}"
+    dest: "/var/cache/telemt/{{ telemt_archive_name }}"
+    checksum: "sha256:{{ telemt_archive_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: telemt_archive
+
+- name: Extract the Telemt release
+  ansible.builtin.unarchive:
+    src: "/var/cache/telemt/{{ telemt_archive_name }}"
+    dest: "{{ telemt_install_dir }}"
+    remote_src: true
+    creates: "{{ telemt_install_dir }}/telemt"
+
+- name: Protect the Telemt binary
+  ansible.builtin.file:
+    path: "{{ telemt_install_dir }}/telemt"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Select the installed Telemt version
+  ansible.builtin.file:
+    src: "{{ telemt_install_dir }}/telemt"
+    dest: "{{ telemt_binary_path }}"
+    state: link
+    force: true
+  register: telemt_binary_link
+
+- name: Require the shared vaulted Telemt secret
+  ansible.builtin.assert:
+    that:
+      - vault_telemt_secret is defined
+    fail_msg: vault_telemt_secret must be defined in an encrypted group_vars file
+  no_log: true
+
+- name: Select the shared Telemt secret
+  ansible.builtin.set_fact:
+    telemt_secret: "{{ vault_telemt_secret }}"
+  no_log: true
+
+- name: Validate the shared Telemt secret
+  ansible.builtin.assert:
+    that:
+      - telemt_secret | length == 32
+      - telemt_secret is match('^[0-9a-f]{32}$')
+    fail_msg: The vaulted Telemt secret must contain exactly 32 lowercase hex characters
+  no_log: true
+
+- name: Install the shared Telemt secret
+  ansible.builtin.copy:
+    content: "{{ telemt_secret }}\n"
+    dest: "{{ telemt_secret_path }}"
+    owner: root
+    group: telemt
+    mode: "0640"
+  register: telemt_shared_secret_file
+  no_log: true
+
+- name: Install the Telemt systemd unit
+  ansible.builtin.template:
+    src: telemt.service.j2
+    dest: /etc/systemd/system/telemt.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: telemt_unit
+
+- name: Reload systemd units
+  ansible.builtin.systemd_service:
+    daemon_reload: true

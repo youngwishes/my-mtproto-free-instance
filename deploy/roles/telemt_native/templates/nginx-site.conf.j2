@@ -1,0 +1,41 @@
+server {
+    listen 0.0.0.0:80 default_server;
+    server_name {{ telemt_domain }} _;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/acme;
+        default_type text/plain;
+    }
+
+    location / {
+        return 301 https://{{ telemt_domain }}$request_uri;
+    }
+}
+
+server {
+    listen 127.0.0.1:8443 ssl default_server;
+    ssl_reject_handshake on;
+}
+
+server {
+    listen 127.0.0.1:8443 ssl;
+    server_name {{ telemt_domain }};
+
+    ssl_certificate /etc/letsencrypt/live/{{ telemt_domain }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ telemt_domain }}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:MASK:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    root /var/www/meow-meow-fast;
+    index index.html;
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy no-referrer always;
+    add_header Cache-Control "public, max-age=300" always;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

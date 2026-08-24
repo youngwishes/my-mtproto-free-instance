@@ -1,0 +1,131 @@
+---
+- name: Upgrade installed Ubuntu packages
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: dist
+    cache_valid_time: 3600
+
+- name: Install runtime packages
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - certbot
+      - curl
+      - jq
+      - nftables
+      - nginx
+      - openssl
+      - tar
+    state: present
+
+- name: Check whether Ubuntu requires a reboot
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: telemt_reboot_required
+
+- name: Reboot after system package upgrades
+  ansible.builtin.reboot:
+    msg: Rebooting to activate updated Ubuntu packages
+    connect_timeout: 10
+    reboot_timeout: 600
+    post_reboot_delay: 5
+  when: telemt_reboot_required.stat.exists
+
+- name: Create the emergency swap file
+  ansible.builtin.command:
+    argv:
+      - fallocate
+      - -l
+      - "{{ telemt_swap_size }}"
+      - /swapfile
+    creates: /swapfile
+  register: telemt_swap_created
+
+- name: Protect the swap file
+  ansible.builtin.file:
+    path: /swapfile
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Format the new swap file
+  ansible.builtin.command:
+    argv:
+      - mkswap
+      - /swapfile
+  when: telemt_swap_created.changed
+
+- name: Inspect active swap devices
+  ansible.builtin.command:
+    argv:
+      - swapon
+      - --show=NAME
+      - --noheadings
+  register: telemt_active_swap
+  changed_when: false
+
+- name: Enable the swap file
+  ansible.builtin.command:
+    argv:
+      - swapon
+      - /swapfile
+  when: "'/swapfile' not in telemt_active_swap.stdout_lines"
+
+- name: Persist the swap file
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    line: /swapfile none swap sw 0 0
+    state: present
+
+- name: Load conntrack at boot
+  ansible.builtin.copy:
+    content: "nf_conntrack\n"
+    dest: /etc/modules-load.d/telemt.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Load conntrack now
+  ansible.builtin.command:
+    argv:
+      - modprobe
+      - nf_conntrack
+  changed_when: false
+
+- name: Configure kernel limits for Telemt
+  ansible.builtin.template:
+    src: 99-telemt.conf.j2
+    dest: /etc/sysctl.d/99-telemt.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Apply sysctl settings
+
+- name: Limit persistent journal storage
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure journald retention
+  ansible.builtin.copy:
+    content: |
+      [Journal]
+      SystemMaxUse=256M
+      RuntimeMaxUse=128M
+      MaxRetentionSec=7day
+      RateLimitIntervalSec=30s
+      RateLimitBurst=10000
+    dest: /etc/systemd/journald.conf.d/telemt.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: telemt_journald_config
+
+- name: Restart journald after configuration changes
+  ansible.builtin.systemd_service:
+    name: systemd-journald
+    state: restarted
+  when: telemt_journald_config.changed

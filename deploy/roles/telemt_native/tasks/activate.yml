@@ -1,0 +1,75 @@
+---
+- name: Install the active Telemt configuration
+  ansible.builtin.template:
+    src: telemt.toml.j2
+    dest: "{{ telemt_config_dir }}/telemt.toml"
+    owner: root
+    group: telemt
+    mode: "0640"
+  when: telemt_activate | bool
+  register: telemt_config_result
+  no_log: true
+
+- name: Enable Telemt with the final host policy
+  ansible.builtin.systemd_service:
+    name: telemt
+    enabled: true
+    state: >-
+      {{ 'restarted' if (
+        telemt_binary_link.changed
+        or telemt_unit.changed
+        or telemt_firewall_config.changed
+        or telemt_certificate.changed
+        or telemt_nginx_site.changed
+        or telemt_config_result.changed
+      ) else 'started' }}
+  when: telemt_activate | bool
+
+- name: Stop Telemt while the deployment is staged
+  ansible.builtin.systemd_service:
+    name: telemt
+    enabled: false
+    state: stopped
+  when: not telemt_activate | bool
+
+- name: Apply the final Telemt configuration
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for the local Telemt API
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 9091
+    timeout: 30
+  when: telemt_activate | bool
+
+- name: Run the Telemt readiness probe
+  ansible.builtin.command:
+    argv:
+      - "{{ telemt_binary_path }}"
+      - healthcheck
+      - --mode
+      - ready
+      - "{{ telemt_config_dir }}/telemt.toml"
+  changed_when: false
+  when: telemt_activate | bool
+
+- name: Check the HTTPS mask path through Telemt
+  ansible.builtin.command:
+    argv:
+      - curl
+      - --fail
+      - --silent
+      - --show-error
+      - --resolve
+      - "{{ telemt_domain }}:443:127.0.0.1"
+      - "https://{{ telemt_domain }}/"
+  register: telemt_mask_response
+  changed_when: false
+  when: telemt_activate | bool
+
+- name: Require the configured static site
+  ansible.builtin.assert:
+    that:
+      - telemt_site_title in telemt_mask_response.stdout
+    fail_msg: Telemt did not relay ordinary HTTPS traffic to the local nginx site
+  when: telemt_activate | bool

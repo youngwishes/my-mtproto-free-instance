@@ -137,6 +137,8 @@ celerybeat.pid
 # Environments
 .env
 .envrc
+.vault-password
+deploy/.vault-password
 .venv
 env/
 venv/

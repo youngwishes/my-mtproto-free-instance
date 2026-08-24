@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{{ telemt_site_description }}">
+  <title>{{ telemt_site_title }}</title>
+  <style>
+    :root { color-scheme: light dark; font-family: ui-serif, Georgia, serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f3efe5; color: #25231f; }
+    main { width: min(42rem, calc(100% - 3rem)); padding: 4rem 0; }
+    p { max-width: 34rem; font-size: 1.1rem; line-height: 1.65; }
+    small { color: #716b61; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #1d1c19; color: #eee9df; }
+      small { color: #aaa397; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <small>Independent notebook</small>
+    <h1>{{ telemt_site_title }}</h1>
+    <p>{{ telemt_site_description }}</p>
+  </main>
+</body>
+</html>

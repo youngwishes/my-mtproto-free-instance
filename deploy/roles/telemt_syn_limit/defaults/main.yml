@@ -1,4 +1,0 @@
----
-telemt_syn_port: 443
-telemt_syn_rate: "54/minute"
-telemt_syn_burst: 5

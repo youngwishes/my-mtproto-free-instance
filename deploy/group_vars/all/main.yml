@@ -1,0 +1,10 @@
+---
+telemt_activate: true
+telemt_domain: meow-meow-fast.site
+telemt_ad_tag: "aefb261ba247803a37b45c65beb314b6"
+
+telemt_version: 3.4.25
+telemt_archive_sha256: 9868b5641677264795ef312a8b2c2e981de711b92cef9f6c977eb2024627366a
+
+telemt_site_title: Meow Meow Fast
+telemt_site_description: A small independent collection of notes and useful references.

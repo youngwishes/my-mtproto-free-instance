@@ -1,0 +1,20 @@
+---
+telemt_activate: false
+telemt_domain: ""
+telemt_ad_tag: ""
+
+telemt_version: 3.4.25
+telemt_archive_name: telemt-x86_64-linux-gnu.tar.gz
+telemt_archive_url: "https://github.com/telemt/telemt/releases/download/{{ telemt_version }}/{{ telemt_archive_name }}"
+telemt_archive_sha256: ""
+telemt_install_dir: "/usr/local/lib/telemt-{{ telemt_version }}"
+telemt_binary_path: /usr/local/bin/telemt
+telemt_config_dir: /etc/telemt
+telemt_state_dir: /var/lib/telemt
+telemt_secret_path: /etc/telemt/secret
+
+telemt_site_title: Field Notes
+telemt_site_description: A small independent collection of notes and useful references.
+telemt_acme_email: ""
+
+telemt_swap_size: 2G
